@@ -54,15 +54,21 @@ var statsClient = new StatsD({
   suffix: opts.suffix
 });
 
-function stat(name, value) {
-  statsClient.gauge(name, value);
+function stat(name, value, callback) {
+  statsClient.gauge(name, value, callback);
 }
 
 async.parallelLimit(opts.pidfiles.map(function(pidfile) {
 
   return function(callback) {
-    fs.readFile(pidfile, { encoding: 'utf8' }, function(err, contents) {
+    function done(err) {
+      if(callback) {
+        callback(err);
+        callback = null;
+      }
+    }
 
+    fs.readFile(pidfile, { encoding: 'utf8' }, function(err, contents) {
       if(err) return callback(err);
       var pid = parseInt(contents.trim(), 10);
 
@@ -76,41 +82,36 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
 
       // received each time the pid tree has been monitored
       mp.once('monitored', function (pid, stats) {
-        try {
-          stat(baseName + '.cpu.user', stats['%usr']);
-          stat(baseName + '.cpu.system', stats['%system']);
-          stat(baseName + '.cpu.guest', stats['%guest']);
-          stat(baseName + '.cpu.percent', stats['%CPU']);
-          stat(baseName + '.mem.faults.minor', stats['minflt/s']);
-          stat(baseName + '.mem.faults.major', stats['majflt/s']);
-          stat(baseName + '.mem.virtual', stats['VSZ']);
-          stat(baseName + '.mem.resident', stats['RSS']);
-          stat(baseName + '.mem.percent', stats['%MEM']);
-          stat(baseName + '.io.read', stats['kB_rd/s']);
-          stat(baseName + '.io.write', stats['kB_wr/s']);
-          stat(baseName + '.io.cancelled', stats['kB_ccwr/s']);
-        } catch(e) {
-          if(callback) {
-            callback(e);
-            callback = null;
-          }
-        }
+        async.parallel([
+          ['cpu.user',        '%usr'],
+          ['cpu.system',      '%system'],
+          ['cpu.guest',       '%guest'],
+          ['cpu.percent',     '%CPU'],
+          ['mem.faults.minor','minflt/s'],
+          ['mem.faults.major','majflt/s'],
+          ['mem.virtual',     'VSZ'],
+          ['mem.resident',    'RSS'],
+          ['mem.percent',     '%MEM'],
+          ['io.read',         'kB_rd/s'],
+          ['io.write',        'kB_wr/s'],
+          ['io.cancelled',    'kB_ccwr/s']
+          ].map(function(statItem) {
+          var name = baseName + '.' + statItem[0];
+          var value = stats[statItem[1]];
 
-        try { mp.stop(); } catch(e) { }
-      });
+          return function(callback) {
+            stat(name, value, callback);
+          };
 
-      mp.on('end', function () {
-        if(callback) {
-          callback();
-          callback = null;
-        }
+        }), function(err) {
+          done(err);
+          try { mp.stop(); } catch(e) { }
+        });
+
       });
 
       mp.on('error', function (err) {
-        if(callback) {
-          callback(err);
-          callback = null;
-        }
+        done(err);
         try { mp.stop(); } catch(e) { }
       });
 
@@ -125,7 +126,9 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
     process.exit(1);
   }
 
-  process.exit(0);
+  setTimeout(function() {
+    process.exit(0);
+  }, 5000).unref();
 });
 
 
