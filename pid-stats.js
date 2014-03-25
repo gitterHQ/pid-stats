@@ -36,7 +36,7 @@ var opts = require("nomnom")
   .option('prefix', {
     abbr: 'P',
     required: false,
-    default: 'process',
+    default: 'process.',
     help: 'Statsd prefix'
   })
   .option('suffix', {
@@ -55,7 +55,7 @@ var statsClient = new StatsD({
 });
 
 function stat(name, value, callback) {
-  statsClient.gauge(name, value, callback);
+  statsClient.gauge(name, value, 1, callback);
 }
 
 async.parallelLimit(opts.pidfiles.map(function(pidfile) {
