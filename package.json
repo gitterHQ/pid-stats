@@ -1,0 +1,30 @@
+{
+  "name": "pid-stats",
+  "version": "0.0.0",
+  "description": "statsd for pids",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/gitterHQ/pid-stats.git"
+  },
+  "keywords": [
+    "devops"
+  ],
+  "author": "Andrew Newdigate",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/gitterHQ/pid-stats/issues"
+  },
+  "bin": {
+    "pid-stats": "./pid-stats.js"
+  },
+  "homepage": "https://github.com/gitterHQ/pid-stats",
+  "dependencies": {
+    "nomnom": "^1.6.2",
+    "node-statsd": "0.0.7",
+    "monitor-pid": "^1.4.3",
+    "async": "^0.2.10"
+  }
+}
