@@ -36,7 +36,7 @@ var opts = require("nomnom")
   .option('prefix', {
     abbr: 'P',
     required: false,
-    default: '',
+    default: 'process',
     help: 'Statsd prefix'
   })
   .option('suffix', {
@@ -59,46 +59,63 @@ function stat(name, value) {
 }
 
 async.parallelLimit(opts.pidfiles.map(function(pidfile) {
-  var pid = fs.readFileSync(pidfile, { encoding: 'utf8' }).trim();
-  var baseName = path.basename(pidfile).replace(/\.pid$/, '');
 
   return function(callback) {
-    var mp = new MonitorPid(pid, { period: opts.period });
+    fs.readFile(pidfile, { encoding: 'utf8' }, function(err, contents) {
 
-    // received each time the pid tree has been monitored
-    mp.once('monitored', function (pid, stats) {
-      mp.stop();
+      if(err) return callback(err);
+      var pid = parseInt(contents.trim(), 10);
 
-      stat(baseName + '.cpu.user', stats['%usr']);
-      stat(baseName + '.cpu.system', stats['%system']);
-      stat(baseName + '.cpu.guest', stats['%guest']);
-      stat(baseName + '.cpu.percent', stats['%CPU']);
-      stat(baseName + '.mem.faults.minor', stats['minflt/s']);
-      stat(baseName + '.mem.faults.major', stats['majflt/s']);
-      stat(baseName + '.mem.virtual', stats['VSZ']);
-      stat(baseName + '.mem.resident', stats['RSS']);
-      stat(baseName + '.mem.percent', stats['%MEM']);
-      stat(baseName + '.io.read', stats['kB_rd/s']);
-      stat(baseName + '.io.write', stats['kB_wr/s']);
-      stat(baseName + '.io.cancelled', stats['kB_ccwr/s']);
-    });
+      var baseName = path.basename(pidfile).replace(/\.pid$/, '');
 
-    mp.on('end', function () {
-      if(callback) {
+      if(isNaN(pid) || pid <= 0) {
         callback();
-        callback = null;
       }
-    });
 
-    mp.on('error', function (err) {
-      if(callback) {
-        callback(err);
-        callback = null;
-      }
-      try { mp.stop(); } catch(e) { }
-    });
+      var mp = new MonitorPid(pid, { period: opts.period });
 
-    mp.start();
+      // received each time the pid tree has been monitored
+      mp.once('monitored', function (pid, stats) {
+        try {
+          stat(baseName + '.cpu.user', stats['%usr']);
+          stat(baseName + '.cpu.system', stats['%system']);
+          stat(baseName + '.cpu.guest', stats['%guest']);
+          stat(baseName + '.cpu.percent', stats['%CPU']);
+          stat(baseName + '.mem.faults.minor', stats['minflt/s']);
+          stat(baseName + '.mem.faults.major', stats['majflt/s']);
+          stat(baseName + '.mem.virtual', stats['VSZ']);
+          stat(baseName + '.mem.resident', stats['RSS']);
+          stat(baseName + '.mem.percent', stats['%MEM']);
+          stat(baseName + '.io.read', stats['kB_rd/s']);
+          stat(baseName + '.io.write', stats['kB_wr/s']);
+          stat(baseName + '.io.cancelled', stats['kB_ccwr/s']);
+        } catch(e) {
+          if(callback) {
+            callback(e);
+            callback = null;
+          }
+        }
+
+        try { mp.stop(); } catch(e) { }
+      });
+
+      mp.on('end', function () {
+        if(callback) {
+          callback();
+          callback = null;
+        }
+      });
+
+      mp.on('error', function (err) {
+        if(callback) {
+          callback(err);
+          callback = null;
+        }
+        try { mp.stop(); } catch(e) { }
+      });
+
+      mp.start();
+    });
 
   };
 
