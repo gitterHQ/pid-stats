@@ -111,7 +111,9 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
       });
 
       mp.on('error', function (err) {
-        done(err);
+        /* Don't throw the error, just swallow it */
+        console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
+        done();
         try { mp.stop(); } catch(e) { }
       });
 
