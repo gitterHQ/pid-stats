@@ -127,16 +127,40 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
         /* procfs stats */
         function(callback) {
           var procStats = procfs(pid);
-          procStats.fds(function(err, fds) {
-            if(err) {
-              /* Don't throw the error, just swallow it */
-              console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
-              callback();
-            }
 
-            var name = baseName + '.fds';
-            stat(name, fds.length, callback);
-          });
+          async.parallel([
+            /* file desciptors */
+            function(callback) {
+              procStats.fds(function(err, fds) {
+                if(err) {
+                  /* Don't throw the error, just swallow it */
+                  console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
+                  callback();
+                }
+
+                var name = baseName + '.fds';
+                stat(name, fds.length, callback);
+              });
+
+            },
+
+            /* threads */
+            function(callback) {
+
+              procStats.threads(function(err, threads) {
+                if(err) {
+                  /* Don't throw the error, just swallow it */
+                  console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
+                  callback();
+                }
+
+                var name = baseName + '.threads';
+                stat(name, threads.length, callback);
+              });
+
+
+            },
+          ], callback);
         }
       ], callback);
     });
