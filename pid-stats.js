@@ -8,6 +8,7 @@ var async      = require('async');
 var StatsD     = require('node-statsd').StatsD;
 var path       = require('path');
 var MonitorPid = require('monitor-pid');
+var procfs     = require('procfs-stats');
 
 var opts = require("nomnom")
   .option('pidfiles', {
@@ -61,63 +62,83 @@ function stat(name, value, callback) {
 async.parallelLimit(opts.pidfiles.map(function(pidfile) {
 
   return function(callback) {
-    function done(err) {
-      if(callback) {
-        callback(err);
-        callback = null;
-      }
-    }
-
     fs.readFile(pidfile, { encoding: 'utf8' }, function(err, contents) {
       if(err) return callback(err);
       var pid = parseInt(contents.trim(), 10);
 
       var baseName = path.basename(pidfile).replace(/\.pid$/, '');
 
+      /* Proceed no further */
       if(isNaN(pid) || pid <= 0) {
         callback();
       }
 
-      var mp = new MonitorPid(pid, { period: opts.period });
+      async.parallel([
+        /* Monitor PID */
+        function(callback) {
+          function done(err) {
+            if(callback) {
+              callback(err);
+              callback = null;
+            }
+          }
 
-      // received each time the pid tree has been monitored
-      mp.once('monitored', function (pid, stats) {
-        async.parallel([
-          ['cpu.user',        '%usr'],
-          ['cpu.system',      '%system'],
-          ['cpu.guest',       '%guest'],
-          ['cpu.percent',     '%CPU'],
-          ['mem.faults.minor','minflt/s'],
-          ['mem.faults.major','majflt/s'],
-          ['mem.virtual',     'VSZ'],
-          ['mem.resident',    'RSS'],
-          ['mem.percent',     '%MEM'],
-          ['io.read',         'kB_rd/s'],
-          ['io.write',        'kB_wr/s'],
-          ['io.cancelled',    'kB_ccwr/s']
-          ].map(function(statItem) {
-          var name = baseName + '.' + statItem[0];
-          var value = stats[statItem[1]];
+          var mp = new MonitorPid(pid, { period: opts.period });
 
-          return function(callback) {
-            stat(name, value, callback);
-          };
+          // received each time the pid tree has been monitored
+          mp.once('monitored', function (pid, stats) {
+            async.parallel([
+              ['cpu.user',        '%usr'],
+              ['cpu.system',      '%system'],
+              ['cpu.guest',       '%guest'],
+              ['cpu.percent',     '%CPU'],
+              ['mem.faults.minor','minflt/s'],
+              ['mem.faults.major','majflt/s'],
+              ['mem.virtual',     'VSZ'],
+              ['mem.resident',    'RSS'],
+              ['mem.percent',     '%MEM'],
+              ['io.read',         'kB_rd/s'],
+              ['io.write',        'kB_wr/s'],
+              ['io.cancelled',    'kB_ccwr/s']
+              ].map(function(statItem) {
+              var name = baseName + '.' + statItem[0];
+              var value = stats[statItem[1]];
 
-        }), function(err) {
-          done(err);
-          try { mp.stop(); } catch(e) { }
-        });
+              return function(callback) {
+                stat(name, value, callback);
+              };
 
-      });
+            }), function(err) {
+              done(err);
+              try { mp.stop(); } catch(e) { }
+            });
 
-      mp.on('error', function (err) {
-        /* Don't throw the error, just swallow it */
-        console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
-        done();
-        try { mp.stop(); } catch(e) { }
-      });
+          });
 
-      mp.start();
+          mp.on('error', function (err) {
+            /* Don't throw the error, just swallow it */
+            console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
+            done();
+            try { mp.stop(); } catch(e) { }
+          });
+
+          mp.start();
+        },
+        /* procfs stats */
+        function(callback) {
+          var procStats = procfs(pid);
+          procStats.fds(function(err, fds) {
+            if(err) {
+              /* Don't throw the error, just swallow it */
+              console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
+              callback();
+            }
+
+            var name = baseName + '.fds';
+            stat(name, fds.length, callback);
+          });
+        }
+      ], callback);
     });
 
   };
