@@ -138,6 +138,9 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
                   callback();
                 }
 
+                // Process does not exist
+                if(!fds) return callback();
+
                 var name = baseName + '.fds';
                 stat(name, fds.length, callback);
               });
@@ -153,6 +156,9 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
                   console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
                   callback();
                 }
+
+                // Process does not exist
+                if(!threads) return callback();
 
                 var name = baseName + '.threads';
                 stat(name, threads.length, callback);
