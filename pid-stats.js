@@ -70,7 +70,7 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
 
       /* Proceed no further */
       if(isNaN(pid) || pid <= 0) {
-        callback();
+        return callback();
       }
 
       async.parallel([
@@ -135,7 +135,7 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
                 if(err) {
                   /* Don't throw the error, just swallow it */
                   console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
-                  callback();
+                  return callback();
                 }
 
                 // Process does not exist
@@ -154,7 +154,7 @@ async.parallelLimit(opts.pidfiles.map(function(pidfile) {
                 if(err) {
                   /* Don't throw the error, just swallow it */
                   console.error('pid-stats: Unable to read pid for ' + pidfile + ': ' + err);
-                  callback();
+                  return callback();
                 }
 
                 // Process does not exist
